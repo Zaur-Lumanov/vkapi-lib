@@ -1,0 +1,32 @@
+{
+  "name": "vkapi-lib",
+  "version": "1.0.1",
+  "description": "VK API Library.",
+  "main": "main.js",
+  "scripts": {
+    "test": "node test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zaur-lumanov/vkapi-lib.git"
+  },
+  "keywords": [
+    "vk",
+    "api",
+    "lib",
+    "sdk"
+  ],
+  "author": "Zaur_Lumanov",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zaur-lumanov/vkapi-lib/issues"
+  },
+  "homepage": "https://github.com/zaur-lumanov/vkapi-lib#readme",
+  "dependencies": {
+    "md5": "^2.2.1",
+    "mime": "^1.3.6",
+    "request": "^2.81.0",
+    "vm": "^0.1.0"
+  },
+  "devDependencies": {}
+}
