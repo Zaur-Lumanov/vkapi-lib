@@ -1,6 +1,6 @@
 {
   "name": "vkapi-lib",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "description": "VK API Library.",
   "main": "main.js",
   "scripts": {

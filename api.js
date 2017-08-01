@@ -546,6 +546,10 @@ module.exports = class API {
 
         const getStream = data => { 
             if (data.match(/http(s):\/\//)) {
+                if (!fs.existsSync('./cache')) {
+                    fs.mkdirSync('./cache')
+                }
+
                 let cpath = `./cache/c_${Math.random()*1e17}`
 
                 const upload_stream = fs.createWriteStream(cpath)
