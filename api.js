@@ -37,7 +37,9 @@ module.exports = class API {
         this.longpoll_callback = {}
         this.lp_message_callback = {}
 
-        this.default_callback = console.log
+
+        this.default_logger = console.log
+        this.default_callback = this.default_logger
         this.default_error_handler = console.error
         this.params = {
             v: VERSION
@@ -67,8 +69,8 @@ module.exports = class API {
                 const script = new vm.Script(callback)
                 const context = new vm.createContext({
                     console,
-                    error: error,
-                    response: response
+                    error,
+                    response
                 })
 
                 try {
@@ -83,8 +85,8 @@ module.exports = class API {
                 const script = new vm.Script(callback.function)
                 const context = new vm.createContext({
                     console,
-                    error: error,
-                    response: response
+                    error,
+                    response
                 })
 
                 for (const key in callback) {
@@ -108,7 +110,7 @@ module.exports = class API {
 
     _call_secure(method, options = {}, callback, token) {
         if (!this.secure_queue_intervals[token]) {
-            const _limit = 0
+            let _limit = 0
 
             if (this.app_users < 1e4) {
                 _limit = SECURE_LIMIT[0]
@@ -151,7 +153,7 @@ module.exports = class API {
                     this.default_error_handler(e)
                 }
 
-                this.secure_queue[token].splice(0, 1)
+                this.secure_queue[token].shift()
                 
                 if (!this.secure_queue[token].length) {
                     clearInterval(this.secure_queue_intervals[token])
@@ -197,7 +199,7 @@ module.exports = class API {
                     this.default_error_handler(e)
                 }
 
-                this.ads_queue[token].splice(0, 1)
+                this.ads_queue[token].shift()
                 
                 if (!this.ads_queue[token].length) {
                     clearInterval(this.ads_queue_intervals[token])
@@ -237,9 +239,6 @@ module.exports = class API {
                     token = this.tokens[token]
 
                     break
-                }
-                else {
-
                 }
             }
             default: {
@@ -311,9 +310,7 @@ module.exports = class API {
                             json: true
                         }, (error, response, body) => {
                             if (body.error) {
-                                console.log(body)
-
-                                return void console.log(body.error)
+                                return this.default_logger(body.error)
                             }
 
                             for (const key in body.response) {
@@ -370,7 +367,7 @@ module.exports = class API {
                     this.default_error_handler(e)
                 }
 
-                this.queue[token].splice(0, 1)
+                this.queue[token].shift()
                 
                 if (!this.queue[token].length) {
                     clearInterval(this.queue_intervals[token])
@@ -402,16 +399,17 @@ module.exports = class API {
         delete options.token
         delete options.reply
 
-        console.log(options)
-
         if (options.typing) {
             this.call('messages.setActivity', {
                 peer_id: options.peer_id,
                 type: 'typing'
             })
+
+            delete options.typing
+
             setTimeout(() => this.call('messages.send', options, callback, token), options.typing)
 
-            return void delete options.typing
+            return
         }
          
         this.call('messages.send', options, callback, token)
@@ -424,7 +422,7 @@ module.exports = class API {
         }, sender, callback)
     }
 
-    longpoll(callback = console.log, params = {
+    longpoll(callback = this.default_logger, params = {
         need_pts: 0, 
         lp_version: 2, 
         mode: 10, 
@@ -448,7 +446,7 @@ module.exports = class API {
                         uri: `https://${response.server}?act=a_check&key=${data.key}&ts=${data.ts}&wait=${params.wait}&mode=${params.mode}&version=${params.lp_version} `,
                     }, (error, response, body) => {
                         if (error || response.statusCode != 200 || body[0] == '<') {
-                            return void console.log(body)
+                            return this.default_logger(body)
                         }
                             
                         body = JSON.parse(body)
@@ -490,7 +488,7 @@ module.exports = class API {
         }, token)
     }
 
-    lp_message(callback = console.log, token) {
+    lp_message(callback = this.default_logger, token) {
         
         if (!this.longpoll_callback[token]) {
             this.longpoll()
@@ -587,7 +585,7 @@ module.exports = class API {
         getStream(path[i])
     }
 
-    uploadPhoto(data, options = {}, callback = console.log, token) {
+    uploadPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.group_id) {
@@ -633,7 +631,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadPhotoOnWall(data, options = {}, callback = console.log, token) {
+    uploadPhotoOnWall(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.group_id) {
@@ -670,7 +668,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadOwnerPhoto(data, options = {}, callback = console.log, token) {
+    uploadOwnerPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.owner_id) {
@@ -708,7 +706,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadMessagesPhoto(data, callback = console.log, token) {
+    uploadMessagesPhoto(data, callback = this.default_callback, token) {
         this.call('photos.getMessagesUploadServer', {}, (error, response) => {
             if (error) {
                 return callback(error, undefined)
@@ -734,7 +732,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadChatPhoto(data, options = {}, callback = console.log, token) {
+    uploadChatPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.chat_id) {
@@ -776,7 +774,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadMarketPhoto(data, options = {}, callback = console.log, token) {
+    uploadMarketPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.group_id) {
@@ -827,7 +825,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadMarketAlbumPhoto(data, options = {}, callback = console.log, token) {
+    uploadMarketAlbumPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.group_id) {
@@ -860,7 +858,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadAudio(data, options = {}, callback = console.log, token) {
+    uploadAudio(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.artist) {
@@ -898,7 +896,10 @@ module.exports = class API {
         }, token)
     }
 
-    uploadVideo(data, options = {name: 'No name'}, callback = console.log, token) {
+    uploadVideo(data, options = {name: 'No name'}, callback = (error, response, upload) => {
+        this.default_logger(error, response)
+        upload(this.default_logger)
+    }, token) {
         const params = {}
 
         if (options.name) {
@@ -960,7 +961,7 @@ module.exports = class API {
                 retn[key] = response[key]
             }
 
-            const upload = (upload_callback = console.log) => this.getUploadStream([data], stream => {
+            const upload = (upload_callback = this.default_logger) => this.getUploadStream([data], stream => {
                 this.upload(response.upload_url, {
                     video_file: stream[0]
                 }, resp => {
@@ -972,7 +973,7 @@ module.exports = class API {
         }, token)
     }
 
-    uploadDocs(data, options = {}, callback = console.log, token) {
+    uploadDocs(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.group_id) {
@@ -1012,13 +1013,13 @@ module.exports = class API {
         }, token)
     }
 
-    uploadMessagesDocs(data, options = {}, callback = console.log, token) {
+    uploadMessagesDocs(data, options = {}, callback = this.default_callback, token) {
 
         // Wait until the method is released :)
 
     }
 
-    uploadOwnerCoverPhoto(data, options = {}, callback = console.log, token) {
+    uploadOwnerCoverPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
         if (options.group_id) {
