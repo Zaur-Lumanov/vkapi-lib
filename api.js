@@ -1,11 +1,13 @@
-const request = require('request')
+const request = require('./request')
 const vm = require('vm')
 const fs = require('fs')
 const mime = require('mime')
 const Message = require('./message')
+const outMessage = require('./outmessage')
 
 const DELAY = 1000/3
 const ADS_DELAY = 1000/2
+const PROTO = 'https'
 const API_URL = 'api.vk.com'
 const VERSION = 5.67
 const SECURE_LIMIT = [5, 8, 20, 35]
@@ -37,13 +39,26 @@ module.exports = class API {
         this.longpoll_callback = {}
         this.lp_message_callback = {}
 
-
         this.default_logger = console.log
         this.default_callback = this.default_logger
         this.default_error_handler = console.error
+
+        this.request_object = new request(this.default_error_handler)
+
+        this.request_object.set_default_option('jsonReviver', data => {
+            try {
+                return JSON.parse(data)
+            } catch (e) {
+                return this.default_error_handler(e)
+            }
+        })
+
+        this.request_object.set_default_header('User-Agent', 'com.vk.vkclient/55 (unknown, iOS 10.1.1, iPhone, Scale/2.000000)')
+
         this.params = {
             v: VERSION
         }
+        
         this.pack = false
         this.app_users = 10000 // default
 
@@ -52,6 +67,10 @@ module.exports = class API {
         for (const o of arguments) {
             this.tokens.push(o)
         }
+    }
+
+    proxy(data) {
+        return this.request_object.proxy(data)
     }
 
     _run(callback, error, response) {
@@ -140,18 +159,14 @@ module.exports = class API {
                     params.options[key] = this.params[key]
                 }
 
-                try {
-                    request({
-                        method: 'POST',
-                        uri: `https://${API_URL}/method/secure.${params.method}`,
-                        formData: params.options,
-                        json: true
-                    }, (error, response, body) => {
-                        this._run(params.callback, body.error, body.response)
-                    })
-                } catch (e) {
-                    this.default_error_handler(e)
-                }
+                this.request_object.request({
+                    method: 'POST',
+                    uri: `${PROTO}://${API_URL}/method/secure.${params.method}`,
+                    formData: params.options,
+                    json: true
+                }, (error, response, body) => {
+                    this._run(params.callback, body.error, body.response)
+                })
 
                 this.secure_queue[token].shift()
                 
@@ -186,18 +201,14 @@ module.exports = class API {
                     params.options[key] = this.params[key]
                 }
 
-                try {
-                    request({
-                        method: 'POST',
-                        uri: `https://${API_URL}/method/ads.${params.method}`,
-                        formData: params.options,
-                        json: true
-                    }, (error, response, body) => {
-                        this._run(params.callback, body.error, body.response)
-                    })
-                } catch (e) {
-                    this.default_error_handler(e)
-                }
+                this.request_object.request({
+                    method: 'POST',
+                    uri: `${PROTO}://${API_URL}/method/ads.${params.method}`,
+                    formData: params.options,
+                    json: true
+                }, (error, response, body) => {
+                    this._run(params.callback, body.error, body.response)
+                })
 
                 this.ads_queue[token].shift()
                 
@@ -218,6 +229,8 @@ module.exports = class API {
 
     setDefaultErrorHandler(callback = () => {}) {
         this.default_error_handler = callback
+
+        this.request_object.set_error_handler(this.default_error_handler)
     }
 
     set_params(data = {
@@ -279,7 +292,7 @@ module.exports = class API {
                         return
                     }
 
-                    let execute_code = 'return [';
+                    let execute_code = 'return ['
 
                     for (let i = 0; i < 25; i++) {
                         if (!this.execute[token][i]) {
@@ -295,37 +308,30 @@ module.exports = class API {
 
                     const spliced = this.execute[token].splice(0, 25)
 
-                    try {
-                        request({
-                            method: 'POST',
-                            uri: `https://${API_URL}/method/execute`,
-                            formData: {
-                                access_token: token,
-                                v: VERSION,
-                                code: execute_code
-                            },
-                            headers: {
-                                'User-Agent': 'com.vk.vkclient/55 (unknown, iOS 10.1.1, iPhone, Scale/2.000000)'
-                            },
-                            json: true
-                        }, (error, response, body) => {
-                            if (body.error) {
-                                return this.default_logger(body.error)
-                            }
+                    this.request_object.request({
+                        method: 'POST',
+                        uri: `${PROTO}://${API_URL}/method/execute`,
+                        formData: {
+                            access_token: token,
+                            v: VERSION,
+                            code: execute_code
+                        },
+                        json: true
+                    }, (error, response, body) => {
+                        if (body.error) {
+                            return this.default_logger(body.error)
+                        }
 
-                            for (const key in body.response) {
-                                if (body.response[key] === false) {
-                                    if (body.execute_errors[key]) {
-                                        this._run(spliced[key].callback, body.execute_errors[key], undefined)
-                                    }
-                                } else {
-                                    this._run(spliced[key].callback, undefined, body.response[key])
+                        for (const key in body.response) {
+                            if (body.response[key] === false) {
+                                if (body.execute_errors[key]) {
+                                    this._run(spliced[key].callback, body.execute_errors[key], undefined)
                                 }
+                            } else {
+                                this._run(spliced[key].callback, undefined, body.response[key])
                             }
-                        })
-                    } catch (e) {
-                        this.default_error_handler(e)
-                    }
+                        }
+                    })
                 }, DELAY, token)
             }
 
@@ -351,21 +357,23 @@ module.exports = class API {
                     params.options[key] = this.params[key]
                 }
 
-                try {
-                    request({
-                        method: 'POST',
-                        uri: `https://${API_URL}/method/${params.method}`,
-                        formData: params.options,
-                        headers: {
-                            'User-Agent': 'com.vk.vkclient/55 (unknown, iOS 10.1.1, iPhone, Scale/2.000000)'
-                        },
-                        json: true
-                    }, (error, response, body) => {
-                        this._run(params.callback, body.error, body.response)
-                    })
-                } catch (e) {
-                    this.default_error_handler(e)
+                for (const key in params.options) {
+                    if (params.options[key] === undefined) {
+                        params.options[key] = ''
+                    }
                 }
+                this.request_object.request({
+                    method: 'POST',
+                    uri: `${PROTO}://${API_URL}/method/${params.method}`,
+                    formData: params.options,
+                    json: true
+                }, (error, response, body) => {
+                    if (error) {
+                        return this.default_error_handler(error)
+                    }
+
+                    this._run(params.callback, body.error, body.response)
+                })
 
                 this.queue[token].shift()
                 
@@ -415,7 +423,11 @@ module.exports = class API {
         this.call('messages.send', options, callback, token)
     }
 
-    sendSticker(sticker_id, sender, callback, token) {
+    message(token) {
+        return new outMessage(this, token)
+    }
+
+    sticker(sticker_id, sender, callback, token) {
         this.send('', {
             sticker_id: sticker_id,
             token
@@ -441,47 +453,53 @@ module.exports = class API {
             }
 
             const longpoll = data => {
-                try {
-                    request({
-                        uri: `https://${response.server}?act=a_check&key=${data.key}&ts=${data.ts}&wait=${params.wait}&mode=${params.mode}&version=${params.lp_version} `,
-                    }, (error, response, body) => {
-                        if (error || response.statusCode != 200 || body[0] == '<') {
-                            return this.default_logger(body)
-                        }
-                            
-                        body = JSON.parse(body)
+                this.request_object.request({
+                    uri: `${PROTO}://${response.server}`,
+                    method: 'GET',
+                    qs: {
+                        act: 'a_check',
+                        key: data.key,
+                        ts: data.ts,
+                        wait: params.wait,
+                        mode: params.mode,
+                        version: params.lp_version
+                    }
+                    //uri: `${PROTO}://${response.server}?act=a_check&key=${data.key}&ts=${data.ts}&wait=${params.wait}&mode=${params.mode}&version=${params.lp_version} `,
+                }, (error, response, body) => {
+                    if (error || response.statusCode != 200 || body[0] == '<') {
+                        return this.default_logger(body)
+                    }
+                        
+                    body = JSON.parse(body)
 
-                        if (body.failed) {
-                            switch (body.failed) {
-                                case 1: {
-                                    return longpoll({ts: body.ts, key: data.key})
-                                }
-                                case 2: case 3: {
-                                    return this.longpoll(this.longpoll_callback[token], params, cerror, token)
-                                }
-                                case 4: {
-                                    params.lp_version = body.max_version
+                    if (body.failed) {
+                        switch (body.failed) {
+                            case 1: {
+                                return longpoll({ts: body.ts, key: data.key})
+                            }
+                            case 2: case 3: {
+                                return this.longpoll(this.longpoll_callback[token], params, cerror, token)
+                            }
+                            case 4: {
+                                params.lp_version = body.max_version
 
-                                    return this.longpoll(this.longpoll_callback[token], params, cerror, token)
-                                }
+                                return this.longpoll(this.longpoll_callback[token], params, cerror, token)
                             }
                         }
+                    }
 
-                        if (params.async || params.await) {
-                            for (const update of body.updates) {
-                                setTimeout(this.longpoll_callback[token], 1, update)
-                            }
-                        } else {
-                            for (const update of body.updates) {
-                                this.longpoll_callback[token](update)
-                            }
+                    if (params.async || params.await) {
+                        for (const update of body.updates) {
+                            setTimeout(this.longpoll_callback[token], 1, update)
                         }
+                    } else {
+                        for (const update of body.updates) {
+                            this.longpoll_callback[token](update)
+                        }
+                    }
 
-                        longpoll({ts: body.ts, key: data.key})
-                    })
-                } catch (e) {
-                    this.default_error_handler(e)
-                }
+                    longpoll({ts: body.ts, key: data.key})
+                })
             }
 
             longpoll({ts: response.ts, key: response.key})
@@ -512,7 +530,7 @@ module.exports = class API {
     }
 
     upload(server, data, callback) {
-        request({
+        this.request_object.request({
             url: server,
             method: 'POST',
             headers: {
@@ -552,7 +570,7 @@ module.exports = class API {
 
                 const upload_stream = fs.createWriteStream(cpath)
 
-                const req = request(data)
+                const req = this.request_object.request(data)
 
                 req.pipe(upload_stream)
 
@@ -588,13 +606,8 @@ module.exports = class API {
     uploadPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
-
-        if (options.album_id) {
-            params.album_id = options.album_id
-        }
+        params.group_id = options.group_id ? options.group_id : ''
+        params.album_id = options.album_id ? options.album_id : ''
 
         this.call('photos.getUploadServer', params, (error, response) => {
             if (error) {
@@ -634,9 +647,7 @@ module.exports = class API {
     uploadPhotoOnWall(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
+        params.group_id = options.group_id ? options.group_id : ''
 
         this.call('photos.getWallUploadServer', params, (error, response) => {
             if (error) {
@@ -671,9 +682,7 @@ module.exports = class API {
     uploadOwnerPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.owner_id) {
-            params.owner_id = options.owner_id
-        }
+        params.owner_id = options.owner_id ? options.owner_id : ''
 
         this.call('photos.getOwnerPhotoUploadServer', params, (error, response) => {
             if (error) {
@@ -735,21 +744,10 @@ module.exports = class API {
     uploadChatPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.chat_id) {
-            params.chat_id = options.chat_id
-        }
-
-        if (options.crop_x) {
-            params.crop_x = options.crop_x
-        }
-
-        if (options.crop_y) {
-            params.crop_y = options.crop_y
-        }
-
-        if (options.crop_width) {
-            params.crop_width = options.crop_width
-        }
+        params.chat_id = options.chat_id ? options.chat_id : ''
+        params.crop_x = options.crop_x ? options.crop_x : ''
+        params.crop_y = options.crop_y ? options.crop_y : ''
+        params.crop_width = options.crop_width ? options.crop_width : ''
 
         this.call('photos.getChatUploadServer', params, (error, response) => {
             if (error) {
@@ -777,25 +775,11 @@ module.exports = class API {
     uploadMarketPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
-
-        if (options.main_photo) {
-            params.main_photo = options.main_photo
-        }
-
-        if (options.crop_x) {
-            params.crop_x = options.crop_x
-        }
-
-        if (options.crop_y) {
-            params.crop_y = options.crop_y
-        }
-
-        if (options.crop_width) {
-            params.crop_width = options.crop_width
-        }
+        params.group_id = options.group_id ? options.group_id : ''
+        params.main_photo = options.main_photo ? options.main_photo : ''
+        params.crop_x = options.crop_x ? options.crop_x : ''
+        params.crop_y = options.crop_y ? options.crop_y : ''
+        params.crop_width = options.crop_width ? options.crop_width : ''
 
         this.call('photos.getMarketUploadServer', params, (error, response) => {
             if (error) {
@@ -828,9 +812,7 @@ module.exports = class API {
     uploadMarketAlbumPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
+        params.group_id = options.group_id ? options.group_id : ''
 
         this.call('photos.getMarketAlbumUploadServer', params, (error, response) => {
             if (error) {
@@ -861,13 +843,8 @@ module.exports = class API {
     uploadAudio(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.artist) {
-            params.artist = options.artist
-        }
-
-        if (options.title) {
-            params.title = options.title
-        }
+        params.artist = options.artist ? options.artist : ''
+        params.title = options.title ? options.title : ''
 
         this.call('audio.getUploadServer', params, (error, response) => {
             if (error) {
@@ -902,49 +879,17 @@ module.exports = class API {
     }, token) {
         const params = {}
 
-        if (options.name) {
-            params.name = options.name
-        }
-
-        if (options.description) {
-            params.description = options.description
-        }
-
-        if (options.is_private) {
-            params.is_private = options.is_private
-        }
-
-        if (options.wallpost) {
-            params.wallpost = options.wallpost
-        }
-
-        if (options.link) {
-            params.link = options.link
-        }
-
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
-
-        if (options.album_id) {
-            params.album_id = options.album_id
-        }
-
-        if (options.privacy_view) {
-            params.privacy_view = options.privacy_view
-        }
-
-        if (options.privacy_comment) {
-            params.privacy_comment = options.privacy_comment
-        }
-
-        if (options.no_comments) {
-            params.no_comments = options.no_comments
-        }
-
-        if (options.repeat) {
-            params.repeat = options.repeat
-        }
+        params.name = options.name ? options.name : ''
+        params.description = options.description ? options.description : ''
+        params.is_private = options.is_private ? options.is_private : ''
+        params.wallpost = options.wallpost ? options.wallpost : ''
+        params.link = options.link ? options.link : ''
+        params.group_id = options.group_id ? options.group_id : ''
+        params.album_id = options.album_id ? options.album_id : ''
+        params.privacy_view = options.privacy_view ? options.privacy_view : ''
+        params.privacy_comment = options.privacy_comment ? options.privacy_comment : ''
+        params.no_comments = options.no_comments ? options.no_comments : ''
+        params.repeat = options.repeat ? options.repeat : ''
 
         this.call('video.save', params, (error, response) => {
             if (error) {
@@ -976,17 +921,10 @@ module.exports = class API {
     uploadDocs(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
-
-        if (options.title) {
-            params.title = options.title
-        }
-
-        if (options.tags) {
-            params.tags = options.tags
-        }
+        params.group_id = options.group_id ? options.group_id : ''
+        params.title = options.title ? options.title : ''
+        params.tags = options.tags ? options.tags : ''
+        params.type = options.type ? options.type : ''
 
         this.call('docs.getUploadServer', params, (error, response) => {
             if (error) {
@@ -998,12 +936,47 @@ module.exports = class API {
                     file: stream[0]
                 }, resp => {
                     if (resp.error) {
-                        return callback(error, undefined)
+                        return callback(resp.error, undefined)
                     }
-
                     this.call('docs.save', {
                         file: resp.file,
-                        title: params.title,
+                        title: params.title ? params.title : stream[0].path.match(/(?:.*\/)?(.*)/)[1],
+                        tags: params.tags
+                    }, (error, response) => {
+                        callback(error, response)
+                    })
+                })
+            })
+        }, token)
+    }
+    uploadWallDocs(data, options = {}, callback = this.default_callback, token) {
+        const params = {}
+
+        params.group_id = options.group_id ? options.group_id : ''
+        params.title = options.title ? options.title : ''
+        params.tags = options.tags ? options.tags : ''
+
+        this.call('docs.getWallUploadServer', params, (error, response) => {
+            if (error) {
+                return callback(error, undefined)
+            }
+
+            const upload_params = {}
+
+            if (options.type) {
+                upload_params.type = options.type
+            }
+
+            this.getUploadStream([data], stream => {
+                upload_params.file = stream[0]
+
+                this.upload(response.upload_url, upload_params, resp => {
+                    if (resp.error) {
+                        return callback(resp.error, undefined)
+                    }
+                    this.call('docs.save', {
+                        file: resp.file,
+                        title: params.title ? params.title : stream[0].path.match(/(?:.*\/)?(.*)/)[1],
                         tags: params.tags
                     }, (error, response) => {
                         callback(error, response)
@@ -1022,25 +995,11 @@ module.exports = class API {
     uploadOwnerCoverPhoto(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 
-        if (options.group_id) {
-            params.group_id = options.group_id
-        }
-
-        if (options.crop_x) {
-            params.crop_x = options.crop_x
-        }
-
-        if (options.crop_y) {
-            params.crop_y = options.crop_y
-        }
-
-        if (options.crop_x2) {
-            params.crop_x2 = options.crop_x2
-        }
-
-        if (options.crop_y2) {
-            params.crop_y2 = options.crop_y2
-        }
+        params.group_id = options.group_id ? options.group_id : ''
+        params.crop_x = options.crop_x ? options.crop_x : ''
+        params.crop_y = options.crop_y ? options.crop_y : ''
+        params.crop_x2 = options.crop_x2 ? options.crop_x2 : ''
+        params.crop_y2 = options.crop_y2 ? options.crop_y2 : ''
 
         this.call('photos.getOwnerCoverPhotoUploadServer', params, (error, response) => {
             if (error) {
