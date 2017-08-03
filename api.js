@@ -388,20 +388,20 @@ module.exports = class API {
         this.queue[token].push({method, options, callback})
     }
 
-    send(text, options = {}, sender = {}, callback) {
-        if (typeof sender == 'object') {
-            if (sender.peer_id) {
-                sender = sender.peer_id
+    send(text, options = {}, peer = {}, callback, token) {
+        if (typeof peer == 'object') {
+            if (peer.peer_id) {
+                peer = peer.peer_id
             }
         }
 
-        const token = options.token
+        var token = token ? token : options.token
 
         options.message = text
-        options.peer_id = sender
+        options.peer_id = peer
 
         if (options.reply) {
-            options.forward_messages = sender.id
+            options.forward_messages = peer.id
         }
 
         delete options.token
@@ -427,11 +427,11 @@ module.exports = class API {
         return new outMessage(this, token)
     }
 
-    sticker(sticker_id, sender, callback, token) {
+    sticker(sticker_id, peer, callback, token) {
         this.send('', {
             sticker_id: sticker_id,
             token
-        }, sender, callback)
+        }, peer, callback)
     }
 
     longpoll(callback = this.default_logger, params = {
@@ -440,7 +440,7 @@ module.exports = class API {
         mode: 10, 
         wait: 25, 
         async: true
-    }, cerror, token) {
+    }, token) {
         this.longpoll_callback[token] = callback
 
         this.call('messages.getLongPollServer', {
@@ -478,12 +478,12 @@ module.exports = class API {
                                 return longpoll({ts: body.ts, key: data.key})
                             }
                             case 2: case 3: {
-                                return this.longpoll(this.longpoll_callback[token], params, cerror, token)
+                                return this.longpoll(this.longpoll_callback[token], params, token)
                             }
                             case 4: {
                                 params.lp_version = body.max_version
 
-                                return this.longpoll(this.longpoll_callback[token], params, cerror, token)
+                                return this.longpoll(this.longpoll_callback[token], params, token)
                             }
                         }
                     }
@@ -523,10 +523,6 @@ module.exports = class API {
                 this.lp_message_callback[token](new Message(data, this, token))
             }
         }
-    }
-
-    message_flag(mask, flag) {
-        return !!(mask&flag)
     }
 
     upload(server, data, callback) {
@@ -776,7 +772,7 @@ module.exports = class API {
         const params = {}
 
         params.group_id = options.group_id ? options.group_id : ''
-        params.main_photo = options.main_photo ? options.main_photo : ''
+        params.main_photo = options.main_photo ? 1 : 0
         params.crop_x = options.crop_x ? options.crop_x : ''
         params.crop_y = options.crop_y ? options.crop_y : ''
         params.crop_width = options.crop_width ? options.crop_width : ''
@@ -924,7 +920,6 @@ module.exports = class API {
         params.group_id = options.group_id ? options.group_id : ''
         params.title = options.title ? options.title : ''
         params.tags = options.tags ? options.tags : ''
-        params.type = options.type ? options.type : ''
 
         this.call('docs.getUploadServer', params, (error, response) => {
             if (error) {
@@ -949,6 +944,7 @@ module.exports = class API {
             })
         }, token)
     }
+
     uploadWallDocs(data, options = {}, callback = this.default_callback, token) {
         const params = {}
 

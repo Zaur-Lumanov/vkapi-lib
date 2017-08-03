@@ -47,6 +47,10 @@ module.exports = class {
         return this
     }
 
+    flag(flag) {
+        return !!(this.flags&flag)
+    }
+
     getMedia(callback = this.__proto__.self.default_callback) {
         this.__proto__.self.call('messages.getById', {
             message_ids: this.id
