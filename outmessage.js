@@ -358,7 +358,7 @@ module.exports = class {
 
             const token = options.token
 
-            options.message = this.message_text
+            options.message = this.__proto__.self.message_filter(this.message_text)
             options.peer_id = sender
             options.forward_messages = this.forward_messages.join(',')
             options.attachment = this.attachments.join(',')

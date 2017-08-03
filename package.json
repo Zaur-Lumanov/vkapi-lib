@@ -1,6 +1,7 @@
 {
   "name": "vkapi-lib",
-  "version": "1.1.0",
+  "version": "1.2.0",
+  "readme": "README.md",
   "description": "VK API Library.",
   "main": "main.js",
   "scripts": {

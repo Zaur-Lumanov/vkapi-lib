@@ -43,6 +43,8 @@ module.exports = class API {
         this.default_callback = this.default_logger
         this.default_error_handler = console.error
 
+        this.message_filter = () => {}
+
         this.request_object = new request(this.default_error_handler)
 
         this.request_object.set_default_option('jsonReviver', data => {
@@ -269,6 +271,12 @@ module.exports = class API {
     call(method, options = {}, callback = this.default_callback, token) {
         token = this.token(token)
 
+        for (const key in options) {
+            if (typeof options[key] == 'boolean') {
+                options[key] = options[key] ? 1 : 0
+            }
+        }
+
         const _method = method.split('.')
 
         switch (_method[0]) {
@@ -389,9 +397,15 @@ module.exports = class API {
     }
 
     send(text, options = {}, peer = {}, callback, token) {
+        text = this.message_filter(text)
+        
         if (typeof peer == 'object') {
             if (peer.peer_id) {
                 peer = peer.peer_id
+            }
+
+            if (options.reply) {
+                options.forward_messages = peer.id
             }
         }
 
@@ -399,10 +413,6 @@ module.exports = class API {
 
         options.message = text
         options.peer_id = peer
-
-        if (options.reply) {
-            options.forward_messages = peer.id
-        }
 
         delete options.token
         delete options.reply
