@@ -43,7 +43,7 @@ module.exports = class API {
         this.default_callback = this.default_logger
         this.default_error_handler = console.error
 
-        this.message_filter = () => {}
+        this.message_filter = (text) => text
 
         this.request_object = new request(this.default_error_handler)
 
@@ -398,7 +398,7 @@ module.exports = class API {
 
     send(text, options = {}, peer = {}, callback, token) {
         text = this.message_filter(text)
-        
+
         if (typeof peer == 'object') {
             if (peer.peer_id) {
                 peer = peer.peer_id
